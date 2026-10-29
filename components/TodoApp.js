@@ -1,7 +1,8 @@
 "use client";
 
-// 화면 코드. DB에 직접 접근하지 않고 백엔드 API(/api/todos, /api/tags)에만 요청한다.
+// 화면 코드. DB(Supabase)에 직접 접근하지 않고 백엔드 API(/api/todos, /api/tags)에만 요청한다.
 import { useCallback, useEffect, useState } from "react";
+import { request } from "@/lib/api-client";
 
 // 사용자 컴퓨터의 현지 날짜 (YYYY-MM-DD)
 function localToday() {
@@ -15,21 +16,9 @@ function formatDueDate(value) {
   return `${month}월 ${day}일`;
 }
 
-// DB의 UTC 일시("YYYY-MM-DD HH:MM:SS")를 현지 날짜로 표시
+// DB의 시간대 포함 일시(ISO 8601)를 현지 날짜로 표시
 function formatCompletedAt(value) {
-  return new Date(`${value.replace(" ", "T")}Z`).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
-}
-
-async function request(url, options) {
-  const response = await fetch(url, {
-    ...options,
-    headers: options?.body ? { "Content-Type": "application/json" } : undefined,
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || `요청 실패 (${response.status})`);
-  }
-  return response.status === 204 ? null : response.json();
+  return new Date(value).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
 }
 
 function TagChip({ tag }) {
@@ -43,7 +32,7 @@ function TagChip({ tag }) {
   );
 }
 
-export default function TodoApp() {
+export default function TodoApp({ user, onSignedOut }) {
   const [today, setToday] = useState(null);
   const [data, setData] = useState({ todos: [], total: 0, remaining: 0 });
   const [tags, setTags] = useState([]);
@@ -69,6 +58,15 @@ export default function TodoApp() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // 세션이 만료되어 401이 오면 로그인 화면으로 돌아간다.
+  const showError = useCallback(
+    (e) => {
+      if (e.status === 401) onSignedOut();
+      else setError(e.message);
+    },
+    [onSignedOut],
+  );
+
   const load = useCallback(async () => {
     if (!today) return;
     const params = new URLSearchParams();
@@ -81,11 +79,11 @@ export default function TodoApp() {
       setTags(tagList);
       setError("");
     } catch (e) {
-      setError(e.message);
+      showError(e);
     } finally {
       setLoaded(true);
     }
-  }, [today, onlyToday, tagId, query]);
+  }, [today, onlyToday, tagId, query, showError]);
 
   useEffect(() => {
     load();
@@ -101,8 +99,13 @@ export default function TodoApp() {
       await action();
       await load();
     } catch (e) {
-      setError(e.message);
+      showError(e);
     }
+  }
+
+  async function logout() {
+    await request("/api/auth/logout", { method: "POST" }).catch(() => {});
+    onSignedOut();
   }
 
   async function handleAdd(event) {
@@ -123,7 +126,8 @@ export default function TodoApp() {
       setTagText("");
       await load();
     } catch (e) {
-      setFormError(e.message);
+      if (e.status === 401) onSignedOut();
+      else setFormError(e.message);
     }
   }
 
@@ -139,6 +143,12 @@ export default function TodoApp() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       {/* 1. 헤더 */}
+      <div className="mb-2 flex items-center justify-end gap-3 text-xs text-slate-500">
+        <span className="truncate">{user.email}</span>
+        <button type="button" onClick={logout} className="rounded border border-slate-300 px-2 py-1 hover:bg-white">
+          로그아웃
+        </button>
+      </div>
       <header className="mb-6 flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold">내 할 일</h1>

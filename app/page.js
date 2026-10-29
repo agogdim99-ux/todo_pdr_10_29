@@ -1,5 +1,5 @@
-import TodoApp from "@/components/TodoApp";
+import App from "@/components/App";
 
 export default function Home() {
-  return <TodoApp />;
+  return <App />;
 }
