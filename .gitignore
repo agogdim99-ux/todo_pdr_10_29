@@ -1,0 +1,13 @@
+# 패키지·빌드 결과물
+node_modules/
+.next/
+
+# 비밀값·환경 설정 (.env.example만 공유)
+.env
+.env*.local
+
+# 로컬 DB (내 할 일 데이터)
+todo.db
+todo.db-journal
+todo.db-wal
+todo.db-shm
